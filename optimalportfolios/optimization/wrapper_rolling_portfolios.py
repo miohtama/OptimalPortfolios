@@ -24,13 +24,16 @@ def compute_rolling_optimal_weights(prices: pd.DataFrame,
                                     span: int = 52,  # ewma span for covariance matrix estimation
                                     roll_window: int = 20,  # linked to returns at rebalancing_freq
                                     carra: float = 0.5,  # carra parameters
-                                    n_mixures: int = 3
+                                    n_mixures: int = 3,
+                                    days_per_year: int=252,
+                                    verbose_solver: bool = False,
                                     ) -> pd.DataFrame:
     """
     wrapper function that links implemented optimisation solvers optimisation methods
     for portfolio_objective in config.PortfolioObjective
     covar_dict: Dict[timestamp, covar matrix] can be precomputed
     portolio is rebalances at covar_dict.keys()
+    verbose_solver: pass to cvxpy to get exceptions inside sokved
     """
     if covar_estimator is None:
         covar_estimator = CovarEstimator(returns_freqs=returns_freq, rebalancing_freq=rebalancing_freq, span=span,
@@ -66,7 +69,10 @@ def compute_rolling_optimal_weights(prices: pd.DataFrame,
                                                         returns_freq=returns_freq,
                                                         rebalancing_freq=rebalancing_freq,
                                                         span=span,
-                                                        roll_window=roll_window)
+                                                        roll_window=roll_window,
+                                                        days_per_year=days_per_year,
+                                                        verbose_solver=verbose_solver,
+                                                        )
 
     elif portfolio_objective == PortfolioObjective.MAX_CARA_MIXTURE:
         weights = opt.rolling_maximize_cara_mixture(prices=prices,

@@ -23,7 +23,9 @@ def rolling_maximize_portfolio_sharpe(prices: pd.DataFrame,
                                       roll_window: int = 20,  # defined on number of periods in rebalancing_freq
                                       solver: str = 'ECOS_BB',
                                       squeeze_factor: Optional[float] = None,  # for squeezing covar matrix
-                                      print_inputs: bool = False
+                                      print_inputs: bool = False,
+                                      days_per_year=252,
+                                      verbose_solver: bool = False,
                                       ) -> pd.DataFrame:
     """
     maximise portfolio alpha subject to constraint on tracking tracking error
@@ -33,6 +35,7 @@ def rolling_maximize_portfolio_sharpe(prices: pd.DataFrame,
                                                  rebalancing_freq=rebalancing_freq,
                                                  roll_window=roll_window,
                                                  annualize=True,
+                                                 days_per_year=days_per_year,
                                                  span=span)
 
     tickers = prices.columns.to_list()
@@ -51,7 +54,9 @@ def rolling_maximize_portfolio_sharpe(prices: pd.DataFrame,
                                                          constraints0=constraints0,
                                                          weights_0=weights_0,
                                                          squeeze_factor=squeeze_factor,
-                                                         solver=solver)
+                                                         solver=solver,
+                                                         verbose_solver=verbose_solver,
+                                                         )
 
             weights_0 = weights_  # update for next rebalancing
             weights[date] = weights_
@@ -66,7 +71,8 @@ def wrapper_maximize_portfolio_sharpe(pd_covar: pd.DataFrame,
                                       constraints0: Constraints,
                                       weights_0: pd.Series = None,
                                       squeeze_factor: Optional[float] = None,  # for squeezing covar matrix
-                                      solver: str = 'ECOS_BB'
+                                      solver: str = 'ECOS_BB',
+                                      verbose_solver: bool = False,
                                       ) -> pd.Series:
     """
     create wrapper accounting for nans or zeros in covar matrix
@@ -83,10 +89,13 @@ def wrapper_maximize_portfolio_sharpe(pd_covar: pd.DataFrame,
                                                          total_to_good_ratio=len(pd_covar.columns) / len(clean_covar.columns),
                                                          weights_0=weights_0)
 
+    assert verbose_solver
     weights = cvx_maximize_portfolio_sharpe(covar=clean_covar.to_numpy(),
                                             means=good_vectors['means'].to_numpy(),
                                             constraints=constraints,
-                                            solver=solver)
+                                            solver=solver,
+                                            verbose=verbose_solver,
+                                            )
 
     weights = pd.Series(weights, index=clean_covar.index)
     weights = weights.reindex(index=pd_covar.index).fillna(0.0)  # align with tickers
@@ -143,7 +152,8 @@ def estimate_rolling_means_covar(prices: pd.DataFrame,
                                  span: int = 52,
                                  annualize: bool = True,
                                  is_regularize: bool = True,
-                                 is_ewm_covar: bool = True
+                                 is_ewm_covar: bool = True,
+                                 days_per_year: int = 252,
                                  ) -> Tuple[pd.DataFrame, List[np.ndarray]]:
 
     """
@@ -153,10 +163,12 @@ def estimate_rolling_means_covar(prices: pd.DataFrame,
     # generate rebalancing dates on the returns index
     rebalancing_schedule = qis.generate_rebalancing_indicators(df=returns, freq=rebalancing_freq)
 
-    if annualize:
-        _, scaler = qis.get_period_days(freq=returns_freq)
-    else:
-        scaler = 1.0
+    freq, scaler = qis.get_period_days(
+        freq=returns_freq,
+        is_calendar=annualize,
+        days_per_year=days_per_year,
+    )
+
     means = {}
     covars = []
     covar0 = np.zeros((len(prices.columns), len(prices.columns)))
